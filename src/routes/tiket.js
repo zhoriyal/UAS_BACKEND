@@ -98,16 +98,28 @@ router.get('/bookings/:id', (req, res) => {
   res.json({ success: true, data: booking });
 });
 
+const { sendTicketNotification } = require('../emailService');
+
 // ─── POST buat pemesanan tiket baru (dari Flutter app) ───────────────────────
-router.post('/bookings', (req, res) => {
+router.post('/bookings', async (req, res) => {
   const {
     nama, email, phone,
     kategori_dewasa = 0, kategori_pelajar = 0, kategori_wna = 0,
-    sesi, visit_date, payment_method = 'QRIS'
+    sesi, visit_date, payment_method = 'QRIS',
+    is_mancanegara = 0
   } = req.body;
 
   if (!nama || !email || !sesi || !visit_date) {
     return res.status(400).json({ success: false, message: 'Nama, email, sesi, dan tanggal kunjungan wajib diisi' });
+  }
+
+  // Tentukan apakah mancanegara dari nomor telepon jika tidak diberikan langsung
+  let finalIsMancanegara = Number(is_mancanegara);
+  if (phone) {
+    const cleanPhone = phone.trim();
+    if (!cleanPhone.startsWith('+62') && !cleanPhone.startsWith('08') && !cleanPhone.startsWith('62')) {
+      finalIsMancanegara = 1;
+    }
   }
 
   // Ambil harga dari database (dinamis sesuai admin)
@@ -116,12 +128,12 @@ router.post('/bookings', (req, res) => {
   const pricePelajar = cats.find(c => c.badge.includes('PELAJAR'))?.price || 5000;
   const priceWna = cats.find(c => c.badge.includes('MANCANEGARA'))?.price || 25000;
 
-  const totalTiket = kategori_dewasa + kategori_pelajar + kategori_wna;
+  const totalTiket = Number(kategori_dewasa) + Number(kategori_pelajar) + Number(kategori_wna);
   if (totalTiket === 0) {
     return res.status(400).json({ success: false, message: 'Pilih minimal 1 tiket' });
   }
 
-  const totalBiaya = (kategori_dewasa * priceDewasa) + (kategori_pelajar * pricePelajar) + (kategori_wna * priceWna);
+  const totalBiaya = (Number(kategori_dewasa) * priceDewasa) + (Number(kategori_pelajar) * pricePelajar) + (Number(kategori_wna) * priceWna);
 
   // Generate ID unik
   const now = new Date();
@@ -132,10 +144,10 @@ router.post('/bookings', (req, res) => {
 
   db.prepare(`
     INSERT INTO ticket_bookings
-      (id, nama, email, phone, kategori_dewasa, kategori_pelajar, kategori_wna,
+      (id, nama, email, phone, is_mancanegara, kategori_dewasa, kategori_pelajar, kategori_wna,
        total_tiket, total_biaya, sesi, visit_date, payment_method, status, checked_in)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MENUNGGU', 0)
-  `).run(bookingId, nama, email, phone || '', kategori_dewasa, kategori_pelajar, kategori_wna,
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'MENUNGGU', 0)
+  `).run(bookingId, nama, email, phone || '', finalIsMancanegara, Number(kategori_dewasa), Number(kategori_pelajar), Number(kategori_wna),
          totalTiket, totalBiaya, sesi, visit_date, payment_method);
 
   const newBooking = db.prepare('SELECT * FROM ticket_bookings WHERE id = ?').get(bookingId);
@@ -147,21 +159,46 @@ router.post('/bookings', (req, res) => {
 });
 
 // ─── PUT update status pembayaran (admin / konfirmasi) ───────────────────────
-router.put('/bookings/:id/status', (req, res) => {
+router.put(['/bookings/:id/status', '/bookings/status'], async (req, res) => {
   const { status } = req.body;
+  const rawId = req.params.id || req.body.id || req.query.id;
   const valid = ['MENUNGGU', 'LUNAS', 'BATAL'];
   if (!valid.includes(status)) {
     return res.status(400).json({ success: false, message: 'Status tidak valid' });
   }
 
-  const booking = db.prepare('SELECT * FROM ticket_bookings WHERE id = ?').get(req.params.id);
+  if (!rawId) {
+    return res.status(400).json({ success: false, message: 'ID pemesanan wajib diisi' });
+  }
+
+  const id = decodeURIComponent(rawId);
+  let booking = db.prepare('SELECT * FROM ticket_bookings WHERE id = ?').get(id);
+  if (!booking && !id.startsWith('#')) {
+    booking = db.prepare('SELECT * FROM ticket_bookings WHERE id = ?').get(`#${id}`);
+  }
   if (!booking) return res.status(404).json({ success: false, message: 'Pemesanan tidak ditemukan' });
 
+  const targetId = booking.id;
   db.prepare(`
     UPDATE ticket_bookings SET status = ?, updated_at = datetime('now','localtime') WHERE id = ?
-  `).run(status, req.params.id);
+  `).run(status, targetId);
 
-  const updated = db.prepare('SELECT * FROM ticket_bookings WHERE id = ?').get(req.params.id);
+  const updated = db.prepare('SELECT * FROM ticket_bookings WHERE id = ?').get(targetId);
+
+  // Jika status LUNAS, kirim notifikasi email berisi QR Code
+  if (status === 'LUNAS') {
+    sendTicketNotification({
+      to: updated.email,
+      nama: updated.nama,
+      bookingId: updated.id,
+      totalTiket: updated.total_tiket,
+      totalBiaya: updated.total_biaya,
+      visitDate: updated.visit_date,
+      sesi: updated.sesi,
+      isMancanegara: Boolean(updated.is_mancanegara),
+    }).catch(err => console.error('Gagal memicu pengiriman email tiket:', err));
+  }
+
   res.json({ success: true, message: 'Status berhasil diperbarui', data: updated });
 });
 

@@ -42,12 +42,24 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now','localtime'))
   );
 
+  -- Tabel Users (Pengunjung / Pemesan)
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nama TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT,
+    auth_provider TEXT DEFAULT 'local', -- 'local' atau 'google'
+    avatar_url TEXT,
+    created_at TEXT DEFAULT (datetime('now','localtime'))
+  );
+
   -- Tabel Pemesanan Tiket
   CREATE TABLE IF NOT EXISTS ticket_bookings (
     id TEXT PRIMARY KEY,
     nama TEXT NOT NULL,
     email TEXT NOT NULL,
     phone TEXT,
+    is_mancanegara INTEGER DEFAULT 0,
     kategori_dewasa INTEGER DEFAULT 0,
     kategori_pelajar INTEGER DEFAULT 0,
     kategori_wna INTEGER DEFAULT 0,
@@ -55,7 +67,7 @@ db.exec(`
     total_biaya INTEGER NOT NULL,
     sesi TEXT NOT NULL,
     visit_date TEXT NOT NULL,
-    payment_method TEXT CHECK(payment_method IN ('QRIS','BANK')) DEFAULT 'QRIS',
+    payment_method TEXT DEFAULT 'QRIS',
     status TEXT CHECK(status IN ('MENUNGGU','LUNAS','BATAL')) DEFAULT 'MENUNGGU',
     checked_in INTEGER DEFAULT 0,
     created_at TEXT DEFAULT (datetime('now','localtime')),

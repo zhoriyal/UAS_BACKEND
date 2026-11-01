@@ -14,19 +14,16 @@ const PORT = process.env.PORT || 3001;
 
 // ─── MIDDLEWARE ──────────────────────────────────────────────────────────────
 app.use(cors({
-  origin: [
-    'http://localhost:3000', // Next.js Admin
-    'http://localhost:5000', // Flutter web
-    'http://10.0.2.2:3001',  // Android emulator
-    'http://localhost:*',
-    '*'                       // Development: izinkan semua
-  ],
+  origin: (origin, callback) => {
+    // Mengizinkan semua origin dari localhost (Flutter web random port, Next.js, emulator)
+    callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // ─── REQUEST LOGGER ──────────────────────────────────────────────────────────
 app.use((req, _res, next) => {
