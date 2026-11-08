@@ -1,6 +1,7 @@
+require('dotenv/config');
 const express = require('express');
 const cors = require('cors');
-require('./database'); // Inisialisasi DB + seed data
+const { initializeDatabase } = require('./database');
 
 const authRoutes      = require('./routes/auth');
 const tiketRoutes     = require('./routes/tiket');
@@ -33,7 +34,8 @@ app.use((req, _res, next) => {
 });
 
 // ─── ROUTES ──────────────────────────────────────────────────────────────────
-app.use('/api/auth',       authRoutes);
+app.use('/api/auth',        authRoutes);
+app.use('/api/auth/user',   authRoutes); // <--- TAMBAHAN INI SUPAYA /api/auth/user/login VALID
 app.use('/api/tiket',      tiketRoutes);
 app.use('/api/koleksi',    koleksiRoutes);
 app.use('/api/ulasan',     ulasanRoutes);
@@ -66,32 +68,39 @@ app.use((req, res) => {
   res.status(404).json({ success: false, message: `Route ${req.originalUrl} tidak ditemukan` });
 });
 
-// ─── ERROR HANDLER ────────────────────────────────────────────────────────────
+// ─── ERROR HANDLER ────────────────────────────────────────────────------------
 app.use((err, _req, res, _next) => {
   console.error('[ERROR]', err.message);
   res.status(500).json({ success: false, message: 'Terjadi kesalahan server', error: err.message });
 });
 
 // ─── START SERVER ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log('');
-  console.log('╔══════════════════════════════════════════════════╗');
-  console.log('║       🏛️  Museum Brawijaya Backend API           ║');
-  console.log('╠══════════════════════════════════════════════════╣');
-  console.log(`║  Server berjalan di: http://localhost:${PORT}       ║`);
-  console.log('║  Database: SQLite (data/museum.db)               ║');
-  console.log('║                                                  ║');
-  console.log('║  Endpoints tersedia:                             ║');
-  console.log(`║  • POST /api/auth/login                          ║`);
-  console.log(`║  • GET  /api/tiket/categories                    ║`);
-  console.log(`║  • POST /api/tiket/bookings                      ║`);
-  console.log(`║  • GET  /api/koleksi                             ║`);
-  console.log(`║  • GET  /api/ulasan                              ║`);
-  console.log(`║  • POST /api/ulasan                              ║`);
-  console.log(`║  • POST /api/ulasan/:id/reply                    ║`);
-  console.log(`║  • GET  /api/dashboard/summary                   ║`);
-  console.log('╚══════════════════════════════════════════════════╝');
-  console.log('');
-});
+initializeDatabase()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log('');
+      console.log('╔══════════════════════════════════════════════════╗');
+      console.log('║        Museum Brawijaya Backend API               ║');
+      console.log('╠══════════════════════════════════════════════════╣');
+      console.log(`║  Server berjalan di: http://localhost:${PORT}        ║`);
+      console.log('║  Database: MySQL                                  ║');
+      console.log('║                                                  ║');
+      console.log('║  Endpoints tersedia:                             ║');
+      console.log(`║  • POST /api/auth/login / user/login             ║`);
+      console.log(`║  • GET  /api/tiket/categories                    ║`);
+      console.log(`║  • POST /api/tiket/bookings                      ║`);
+      console.log(`║  • GET  /api/koleksi                             ║`);
+      console.log(`║  • GET  /api/ulasan                              ║`);
+      console.log(`║  • POST /api/ulasan                              ║`);
+      console.log(`║  • POST /api/ulasan/:id/reply                    ║`);
+      console.log(`║  • GET  /api/dashboard/summary                   ║`);
+      console.log('╚══════════════════════════════════════════════════╝');
+      console.log('');
+    });
+  })
+  .catch((error) => {
+    console.error('Gagal menginisialisasi database MySQL:', error);
+    process.exitCode = 1;
+  });
 
 module.exports = app;
