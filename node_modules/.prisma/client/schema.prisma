@@ -1,0 +1,116 @@
+// Prisma schema file for Museum Brawijaya
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Admin {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String   @map("password_hash")
+  nama         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("admins")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  nama         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("USER")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model TicketCategory {
+  id         Int      @id @default(autoincrement())
+  badge      String
+  badgeBg    String   @default("#fef3c7") @map("badge_bg")
+  badgeColor String   @default("#92400e") @map("badge_color")
+  title      String
+  price      Int
+  kuota      Int      @default(100)
+  status     String   @default("Aktif")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("ticket_categories")
+}
+
+model TicketBooking {
+  id              String   @id
+  nama            String
+  email           String
+  phone           String?
+  kategoriDewasa  Int      @default(0) @map("kategori_dewasa")
+  kategoriPelajar Int      @default(0) @map("kategori_pelajar")
+  kategoriWna     Int      @default(0) @map("kategori_wna")
+  totalTiket      Int      @default(1) @map("total_tiket")
+  totalBiaya      Int      @default(0) @map("total_biaya")
+  sesi            String   @default("08:00 - 10:00")
+  visitDate       String   @map("visit_date")
+  paymentMethod   String   @default("QRIS") @map("payment_method")
+  status          String   @default("MENUNGGU")
+  checkedIn       Int      @default(0) @map("checked_in")
+  checkedInAt     DateTime? @map("checked_in_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("ticket_bookings")
+}
+
+model Koleksi {
+  id               Int      @id @default(autoincrement())
+  kode             String   @unique
+  nama             String
+  subDeskripsi     String   @map("sub_deskripsi")
+  deskripsiLengkap String?  @map("deskripsi_lengkap")
+  kategori         String   @default("Kendaraan")
+  tahun            String?
+  lokasi           String?
+  status           String   @default("DIPAMERKAN")
+  imageUrl         String?  @map("image_url")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("koleksi")
+}
+
+model Ulasan {
+  id            Int      @id @default(autoincrement())
+  nama          String
+  avatarInitial String   @default("?") @map("avatar_initial")
+  avatarColor   String   @default("#3F5243") @map("avatar_color")
+  category      String   @default("Umum")
+  rating        Int      @default(5)
+  comment       String
+  reply         String?
+  replyDate     String?  @map("reply_date")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("ulasan")
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String
+  otpCode   String   @map("otp_code")
+  used      Int      @default(0)
+  expiredAt DateTime @map("expired_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("password_resets")
+}
+
