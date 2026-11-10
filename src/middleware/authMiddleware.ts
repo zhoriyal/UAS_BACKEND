@@ -8,12 +8,13 @@ function toAuthUser(payload: string | JwtPayload): AuthUser | null {
     return null;
   }
 
-  const { id, nama, role, username, email } = payload;
+  const { id, nama, role, accountType, username, email } = payload;
   if (
     typeof id !== 'number' ||
     !Number.isSafeInteger(id) ||
     typeof nama !== 'string' ||
-    typeof role !== 'string'
+    typeof role !== 'string' ||
+    (accountType !== undefined && accountType !== 'USER' && accountType !== 'ADMIN')
   ) {
     return null;
   }
@@ -22,6 +23,7 @@ function toAuthUser(payload: string | JwtPayload): AuthUser | null {
     id,
     nama,
     role,
+    ...(accountType === 'USER' || accountType === 'ADMIN' ? { accountType } : {}),
     ...(typeof username === 'string' ? { username } : {}),
     ...(typeof email === 'string' ? { email } : {}),
   };

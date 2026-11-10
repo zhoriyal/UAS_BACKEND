@@ -4,7 +4,13 @@
 
 Gunakan Node.js 22 atau lebih baru.
 
-Buat database MySQL, lalu atur `DATABASE_URL` pada `.env` dengan format berikut:
+Buat database MySQL lokal, lalu atur `DATABASE_URL` dan `JWT_SECRET` pada `.env`:
+
+Contoh nilai `JWT_SECRET`:
+
+```env
+JWT_SECRET="ganti-dengan-rahasia-panjang-dan-acak"
+```
 
 ```env
 DATABASE_URL="mysql://USER:PASSWORD@HOST:3306/DATABASE"
@@ -18,8 +24,7 @@ npm run db:push
 npm run dev
 ```
 
-Server berjalan di `http://localhost:3001` secara default. Pastikan `.env` juga berisi `JWT_SECRET`. `PORT` dapat diatur untuk mengganti port bawaan.
-Data contoh akan ditambahkan ke tabel yang masih kosong saat backend pertama kali dijalankan. Admin awal dapat diatur menggunakan `ADMIN_INITIAL_USERNAME` dan `ADMIN_INITIAL_PASSWORD`; jika tidak diatur, kredensial awal adalah `admin` / `admin123`.
+Server berjalan di `http://localhost:3001` secara default. `PORT` dapat diatur untuk mengganti port. Database dihubungkan melalui Prisma saat server dimulai; backend tidak melakukan seeding atau mengubah kredensial admin secara otomatis.
 
 ## Keamanan, error, dan logging
 

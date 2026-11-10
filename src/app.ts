@@ -6,12 +6,12 @@ import rateLimiter from './middleware/rateLimiter';
 import authRoutes from './routes/authRoutes';
 import { getJwtSecret } from './lib/jwtSecret';
 import { logger, requestLogger } from './logger';
+import prisma from './lib/prisma';
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
 
 getJwtSecret();
-const { initializeDatabase } = require('./database');
 
 if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGINS?.trim()) {
   throw new Error('CORS_ORIGINS wajib diatur di production ke origin frontend yang diizinkan');
@@ -46,6 +46,11 @@ const isLocalDevelopmentOrigin = (origin: string | undefined): boolean => {
 
 app.use(requestLogger);
 app.use(helmet());
+app.use(rateLimiter({
+  windowMs: 15 * 60_000,
+  maxRequests: 100,
+  message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
+}));
 app.use(cors({
   origin: (origin, callback) => {
     const isAllowedLocalOrigin = process.env.NODE_ENV !== 'production'
@@ -60,11 +65,6 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
-}));
-app.use(rateLimiter({
-  windowMs: 15 * 60_000,
-  maxRequests: 100,
-  message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
@@ -120,14 +120,14 @@ const errorHandler: ErrorRequestHandler = (error, req, res, next) => {
 };
 app.use(errorHandler);
 
-initializeDatabase()
+prisma.$connect()
   .then(() => {
     app.listen(port, () => {
       logger.info({ port }, `Museum Brawijaya Backend API berjalan di http://localhost:${port}`);
     });
   })
   .catch((error: unknown) => {
-    logger.fatal({ err: error }, 'Gagal menginisialisasi database MySQL');
+    logger.fatal({ err: error }, 'Gagal terhubung ke database melalui Prisma');
     process.exitCode = 1;
   });
 

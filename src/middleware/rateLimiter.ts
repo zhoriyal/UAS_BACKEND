@@ -14,6 +14,7 @@ export default function rateLimiter({
   return rateLimit({
     windowMs,
     limit: maxRequests,
+    statusCode: 429,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     handler: (_req, res) => {

@@ -7,7 +7,7 @@
     "start": "tsx src/app.ts",
     "dev": "tsx watch src/app.ts",
     "db:push": "prisma db push",
-    "build": "prisma generate"
+    "build": "prisma generate && tsc --noEmit"
   },
   "keywords": [
     "museum",

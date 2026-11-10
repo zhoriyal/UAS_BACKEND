@@ -1,5 +1,9 @@
+export function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
+  return isString(value) && value.trim().length > 0;
 }
 
 export function isValidEmail(value: unknown): value is string {
@@ -11,5 +15,5 @@ export function isValidEmail(value: unknown): value is string {
 }
 
 export function sanitizeString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : '';
+  return isString(value) ? value.trim() : '';
 }

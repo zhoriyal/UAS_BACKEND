@@ -4,6 +4,7 @@ export interface AuthUser {
   id: number;
   nama: string;
   role: string;
+  accountType?: 'USER' | 'ADMIN';
   username?: string;
   email?: string;
 }

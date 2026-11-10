@@ -16,6 +16,7 @@ interface AuthAccount {
   nama: string;
   passwordHash: string;
   role: string;
+  accountType: 'USER' | 'ADMIN';
   username?: string;
   email?: string;
 }
@@ -57,6 +58,11 @@ export const register = asyncHandler(async (req, res) => {
   const passwordCheck = validatePasswordStrength(password);
   if (!passwordCheck.valid || typeof password !== 'string') {
     res.status(400).json({ success: false, message: passwordCheck.message });
+    return;
+  }
+
+  if (requestedRole !== undefined && typeof requestedRole !== 'string') {
+    res.status(400).json({ success: false, message: 'Role pendaftaran tidak valid' });
     return;
   }
 
@@ -134,6 +140,7 @@ export const login = asyncHandler(async (req, res) => {
         nama: matchedAdmin.nama,
         passwordHash: matchedAdmin.passwordHash,
         role: matchedAdmin.role,
+        accountType: 'ADMIN',
         username: matchedAdmin.username,
       }
     : null;
@@ -146,6 +153,7 @@ export const login = asyncHandler(async (req, res) => {
         nama: user.nama,
         passwordHash: user.passwordHash,
         role: user.role,
+        accountType: 'USER',
         email: user.email,
       };
     }
@@ -164,6 +172,7 @@ export const login = asyncHandler(async (req, res) => {
       email,
       nama: account.nama,
       role: account.role,
+      accountType: account.accountType,
     },
     getJwtSecret(),
     { expiresIn: '24h' },
@@ -183,72 +192,56 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
-export const googleLogin = asyncHandler(async (req, res) => {
-  const body = getBody(req);
-  const email = isValidEmail(body.email) ? body.email.trim().toLowerCase() : '';
-  const nama = sanitizeString(body.nama) || 'Pengunjung Brawijaya';
-  const avatarUrl = isNonEmptyString(body.avatarUrl) ? sanitizeString(body.avatarUrl) : null;
-
-  if (!email) {
-    res.status(400).json({ success: false, message: 'Email Google tidak valid' });
-    return;
-  }
-
-  let user = await prisma.user.findUnique({ where: { email } });
-
-  if (!user) {
-    user = await prisma.user.create({
-      data: {
-        nama,
-        email,
-        authProvider: 'google',
-        avatarUrl: avatarUrl ?? undefined,
-        role: 'USER',
-      },
-    });
-  } else if (user.authProvider === 'local' && !user.passwordHash) {
-    user = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        authProvider: 'google',
-        avatarUrl: avatarUrl ?? user.avatarUrl,
-      },
-    });
-  }
-
-  const token = jwt.sign(
-    {
-      id: user.id,
-      username: user.email,
-      email: user.email,
-      nama: user.nama,
-      role: user.role,
-    },
-    getJwtSecret(),
-    { expiresIn: '24h' },
-  );
-
-  res.status(200).json({
-    success: true,
-    message: 'Login Google berhasil',
-    data: {
-      token,
-      user: {
-        id: user.id,
-        nama: user.nama,
-        email: user.email,
-        auth_provider: user.authProvider,
-        avatar_url: user.avatarUrl,
-        role: user.role,
-      },
-    },
-  });
-});
-
 export const logout: RequestHandler = (_req, res) => {
   res.json({ success: true, message: 'Logout berhasil' });
 };
 
-export const getMe: RequestHandler = (req, res) => {
-  res.json({ success: true, data: req.user });
-};
+export const getMe = asyncHandler(async (req, res) => {
+  const identity = req.user;
+  if (!identity) {
+    res.status(401).json({ success: false, message: 'Tidak terotentikasi' });
+    return;
+  }
+
+  const accountType = identity.accountType
+    ?? (identity.role.toUpperCase() === 'USER' ? 'USER' : 'ADMIN');
+  if (accountType === 'ADMIN') {
+    const username = identity.username ?? identity.email;
+    const admin = username
+      ? await prisma.admin.findUnique({ where: { username } })
+      : null;
+
+    if (!admin) {
+      res.status(401).json({ success: false, message: 'Akun tidak lagi tersedia' });
+      return;
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: admin.id,
+        nama: admin.nama,
+        username: admin.username,
+        email: admin.username,
+        role: admin.role,
+      },
+    });
+    return;
+  }
+
+  const user = await prisma.user.findUnique({ where: { id: identity.id } });
+  if (!user) {
+    res.status(401).json({ success: false, message: 'Akun tidak lagi tersedia' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: user.id,
+      nama: user.nama,
+      email: user.email,
+      role: user.role,
+    },
+  });
+});
