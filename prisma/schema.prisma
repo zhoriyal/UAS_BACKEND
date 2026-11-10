@@ -1,12 +1,9 @@
-// Prisma schema file for Museum Brawijaya
-// Learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "mysql"
   url      = env("DATABASE_URL")
 }
 
@@ -15,8 +12,9 @@ model Admin {
   username     String   @unique
   passwordHash String   @map("password_hash")
   nama         String
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  role         String   @default("ADMIN")
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("admins")
 }
@@ -25,10 +23,12 @@ model User {
   id           Int      @id @default(autoincrement())
   nama         String
   email        String   @unique
-  passwordHash String   @map("password_hash")
+  passwordHash String?  @map("password_hash")
+  authProvider String   @default("local") @map("auth_provider")
+  avatarUrl    String?  @map("avatar_url")
   role         String   @default("USER")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("users")
 }
@@ -40,32 +40,33 @@ model TicketCategory {
   badgeColor String   @default("#92400e") @map("badge_color")
   title      String
   price      Int
-  kuota      Int      @default(100)
+  kuota      Int      @default(500)
   status     String   @default("Aktif")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("ticket_categories")
 }
 
 model TicketBooking {
-  id              String   @id
+  id              String    @id
   nama            String
   email           String
   phone           String?
-  kategoriDewasa  Int      @default(0) @map("kategori_dewasa")
-  kategoriPelajar Int      @default(0) @map("kategori_pelajar")
-  kategoriWna     Int      @default(0) @map("kategori_wna")
-  totalTiket      Int      @default(1) @map("total_tiket")
-  totalBiaya      Int      @default(0) @map("total_biaya")
-  sesi            String   @default("08:00 - 10:00")
-  visitDate       String   @map("visit_date")
-  paymentMethod   String   @default("QRIS") @map("payment_method")
-  status          String   @default("MENUNGGU")
-  checkedIn       Int      @default(0) @map("checked_in")
-  checkedInAt     DateTime? @map("checked_in_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  isMancanegara   Int       @default(0) @map("is_mancanegara")
+  kategoriDewasa  Int       @default(0) @map("kategori_dewasa")
+  kategoriPelajar Int       @default(0) @map("kategori_pelajar")
+  kategoriWna     Int       @default(0) @map("kategori_wna")
+  totalTiket      Int       @default(1) @map("total_tiket")
+  totalBiaya      Int       @default(0) @map("total_biaya")
+  sesi            String    @default("08:00 - 10:00")
+  visitDate       String    @map("visit_date")
+  paymentMethod   String    @default("QRIS") @map("payment_method")
+  status          String    @default("MENUNGGU")
+  checkedIn       Int       @default(0) @map("checked_in")
+  checkedInAt     DateTime? @map("checked_in_at") @db.DateTime(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("ticket_bookings")
 }
@@ -74,15 +75,15 @@ model Koleksi {
   id               Int      @id @default(autoincrement())
   kode             String   @unique
   nama             String
-  subDeskripsi     String   @map("sub_deskripsi")
-  deskripsiLengkap String?  @map("deskripsi_lengkap")
+  subDeskripsi     String   @map("sub_deskripsi") @db.Text
+  deskripsiLengkap String?  @map("deskripsi_lengkap") @db.Text
   kategori         String   @default("Kendaraan")
   tahun            String?
   lokasi           String?
   status           String   @default("DIPAMERKAN")
   imageUrl         String?  @map("image_url")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  createdAt        DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("koleksi")
 }
@@ -92,15 +93,46 @@ model Ulasan {
   nama          String
   avatarInitial String   @default("?") @map("avatar_initial")
   avatarColor   String   @default("#3F5243") @map("avatar_color")
-  category      String   @default("Umum")
+  category      String   @default("Kunjungan Umum")
   rating        Int      @default(5)
-  comment       String
-  reply         String?
+  comment       String   @db.Text
+  reply         String?  @db.Text
   replyDate     String?  @map("reply_date")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
   @@map("ulasan")
+}
+
+model Pengumuman {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  category    String
+  date        String
+  status      String   @default("AKTIF")
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@map("pengumuman")
+}
+
+model Faq {
+  id        Int      @id @default(autoincrement())
+  question  String   @db.Text
+  answer    String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@map("faq")
+}
+
+model JamOperasional {
+  id        Int      @id @default(autoincrement())
+  hari      String
+  jam       String
+  telepon   String?
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+
+  @@map("jam_operasional")
 }
 
 model PasswordReset {
@@ -108,9 +140,8 @@ model PasswordReset {
   email     String
   otpCode   String   @map("otp_code")
   used      Int      @default(0)
-  expiredAt DateTime @map("expired_at")
-  createdAt DateTime @default(now()) @map("created_at")
+  expiredAt DateTime @map("expired_at") @db.DateTime(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
 
   @@map("password_resets")
 }
-

@@ -1,119 +1,126 @@
 const express = require('express');
-const db = require('../database');
+const { query, asyncHandler } = require('../database');
 const router = express.Router();
 
-// ─── GET semua pengumuman ─────────────────────────────────────────────────────
-router.get('/', (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { status } = req.query;
-  let query = 'SELECT * FROM pengumuman WHERE 1=1';
-  const params = [];
-  if (status && status !== 'Semua') {
-    query += ' AND status = ?';
-    params.push(status);
-  }
-  query += ' ORDER BY id DESC';
-  const items = db.prepare(query).all(...params);
+  const items = status && status !== 'Semua'
+    ? await query('SELECT * FROM pengumuman WHERE status = ? ORDER BY id DESC', [status])
+    : await query('SELECT * FROM pengumuman ORDER BY id DESC');
   res.json({ success: true, data: items });
-});
+}));
 
-// ─── POST tambah pengumuman (admin) ───────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { title, description, category, date, status } = req.body;
   if (!title || !category || !date) {
-    return res.status(400).json({ success: false, message: 'Judul, kategori, dan tanggal wajib diisi' });
+    res.status(400).json({ success: false, message: 'Judul, kategori, dan tanggal wajib diisi' });
+    return;
   }
-  const result = db.prepare(`
+  const result = await query(`
     INSERT INTO pengumuman (title, description, category, date, status)
     VALUES (?, ?, ?, ?, ?)
-  `).run(title, description || '', category, date, status || 'AKTIF');
-  const newItem = db.prepare('SELECT * FROM pengumuman WHERE id = ?').get(result.lastInsertRowid);
+  `, [title, description || '', category, date, status || 'AKTIF']);
+  const [newItem] = await query('SELECT * FROM pengumuman WHERE id = ?', [result.insertId]);
   res.status(201).json({ success: true, message: 'Pengumuman berhasil ditambahkan', data: newItem });
-});
+}));
 
-// ─── PUT edit pengumuman (admin) ──────────────────────────────────────────────
-router.put('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM pengumuman WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, message: 'Pengumuman tidak ditemukan' });
+router.put('/:id', asyncHandler(async (req, res) => {
+  const [existing] = await query('SELECT * FROM pengumuman WHERE id = ?', [req.params.id]);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Pengumuman tidak ditemukan' });
+    return;
+  }
   const { title, description, category, date, status } = req.body;
-  db.prepare(`
-    UPDATE pengumuman SET title = ?, description = ?, category = ?, date = ?, status = ? WHERE id = ?
-  `).run(
+  await query(`
+    UPDATE pengumuman
+    SET title = ?, description = ?, category = ?, date = ?, status = ?
+    WHERE id = ?
+  `, [
     title || existing.title,
     description ?? existing.description,
     category || existing.category,
     date || existing.date,
     status || existing.status,
-    req.params.id
-  );
-  const updated = db.prepare('SELECT * FROM pengumuman WHERE id = ?').get(req.params.id);
+    req.params.id,
+  ]);
+  const [updated] = await query('SELECT * FROM pengumuman WHERE id = ?', [req.params.id]);
   res.json({ success: true, message: 'Pengumuman berhasil diperbarui', data: updated });
-});
+}));
 
-// ─── DELETE pengumuman (admin) ────────────────────────────────────────────────
-router.delete('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM pengumuman WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, message: 'Pengumuman tidak ditemukan' });
-  db.prepare('DELETE FROM pengumuman WHERE id = ?').run(req.params.id);
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const [existing] = await query('SELECT * FROM pengumuman WHERE id = ?', [req.params.id]);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Pengumuman tidak ditemukan' });
+    return;
+  }
+  await query('DELETE FROM pengumuman WHERE id = ?', [req.params.id]);
   res.json({ success: true, message: 'Pengumuman berhasil dihapus' });
-});
+}));
 
-// ─── GET semua FAQ ────────────────────────────────────────────────────────────
-router.get('/faq', (req, res) => {
-  const items = db.prepare('SELECT * FROM faq ORDER BY id ASC').all();
+router.get('/faq', asyncHandler(async (_req, res) => {
+  const items = await query('SELECT * FROM faq ORDER BY id ASC');
   res.json({ success: true, data: items });
-});
+}));
 
-// ─── POST tambah FAQ (admin) ──────────────────────────────────────────────────
-router.post('/faq', (req, res) => {
+router.post('/faq', asyncHandler(async (req, res) => {
   const { question, answer } = req.body;
   if (!question || !answer) {
-    return res.status(400).json({ success: false, message: 'Pertanyaan dan jawaban wajib diisi' });
+    res.status(400).json({ success: false, message: 'Pertanyaan dan jawaban wajib diisi' });
+    return;
   }
-  const result = db.prepare('INSERT INTO faq (question, answer) VALUES (?, ?)').run(question, answer);
-  const newFaq = db.prepare('SELECT * FROM faq WHERE id = ?').get(result.lastInsertRowid);
+  const result = await query('INSERT INTO faq (question, answer) VALUES (?, ?)', [question, answer]);
+  const [newFaq] = await query('SELECT * FROM faq WHERE id = ?', [result.insertId]);
   res.status(201).json({ success: true, message: 'FAQ berhasil ditambahkan', data: newFaq });
-});
+}));
 
-// ─── PUT edit FAQ (admin) ─────────────────────────────────────────────────────
-router.put('/faq/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM faq WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, message: 'FAQ tidak ditemukan' });
+router.put('/faq/:id', asyncHandler(async (req, res) => {
+  const [existing] = await query('SELECT * FROM faq WHERE id = ?', [req.params.id]);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'FAQ tidak ditemukan' });
+    return;
+  }
   const { question, answer } = req.body;
-  db.prepare('UPDATE faq SET question = ?, answer = ? WHERE id = ?').run(
+  await query('UPDATE faq SET question = ?, answer = ? WHERE id = ?', [
     question || existing.question,
     answer || existing.answer,
-    req.params.id
-  );
-  const updated = db.prepare('SELECT * FROM faq WHERE id = ?').get(req.params.id);
+    req.params.id,
+  ]);
+  const [updated] = await query('SELECT * FROM faq WHERE id = ?', [req.params.id]);
   res.json({ success: true, message: 'FAQ berhasil diperbarui', data: updated });
-});
+}));
 
-// ─── DELETE FAQ (admin) ───────────────────────────────────────────────────────
-router.delete('/faq/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM faq WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, message: 'FAQ tidak ditemukan' });
-  db.prepare('DELETE FROM faq WHERE id = ?').run(req.params.id);
-  res.json({ success: true, message: 'FAQ berhasil dihapus' });
-});
-
-// ─── GET jam operasional ──────────────────────────────────────────────────────
-router.get('/jam-operasional', (req, res) => {
-  const jam = db.prepare('SELECT * FROM jam_operasional ORDER BY id DESC LIMIT 1').get();
-  res.json({ success: true, data: jam || { hari: 'Selasa - Minggu', jam: '08:00 - 15:00 WIB', telepon: '(0341) 551502' } });
-});
-
-// ─── PUT update jam operasional (admin) ───────────────────────────────────────
-router.put('/jam-operasional', (req, res) => {
-  const { hari, jam, telepon } = req.body;
-  const existing = db.prepare('SELECT * FROM jam_operasional ORDER BY id DESC LIMIT 1').get();
-  if (existing) {
-    db.prepare(`UPDATE jam_operasional SET hari = ?, jam = ?, telepon = ?, updated_at = datetime('now','localtime') WHERE id = ?`)
-      .run(hari || existing.hari, jam || existing.jam, telepon || existing.telepon, existing.id);
-  } else {
-    db.prepare('INSERT INTO jam_operasional (hari, jam, telepon) VALUES (?, ?, ?)').run(hari, jam, telepon);
+router.delete('/faq/:id', asyncHandler(async (req, res) => {
+  const [existing] = await query('SELECT * FROM faq WHERE id = ?', [req.params.id]);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'FAQ tidak ditemukan' });
+    return;
   }
-  const updated = db.prepare('SELECT * FROM jam_operasional ORDER BY id DESC LIMIT 1').get();
+  await query('DELETE FROM faq WHERE id = ?', [req.params.id]);
+  res.json({ success: true, message: 'FAQ berhasil dihapus' });
+}));
+
+router.get('/jam-operasional', asyncHandler(async (_req, res) => {
+  const [hours] = await query('SELECT * FROM jam_operasional ORDER BY id DESC LIMIT 1');
+  res.json({
+    success: true,
+    data: hours || { hari: 'Selasa - Minggu', jam: '08:00 - 15:00 WIB', telepon: '(0341) 551502' },
+  });
+}));
+
+router.put('/jam-operasional', asyncHandler(async (req, res) => {
+  const { hari, jam, telepon } = req.body;
+  const [existing] = await query('SELECT * FROM jam_operasional ORDER BY id DESC LIMIT 1');
+  if (existing) {
+    await query(`
+      UPDATE jam_operasional
+      SET hari = ?, jam = ?, telepon = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [hari || existing.hari, jam || existing.jam, telepon || existing.telepon, existing.id]);
+  } else {
+    await query('INSERT INTO jam_operasional (hari, jam, telepon) VALUES (?, ?, ?)', [hari, jam, telepon]);
+  }
+  const [updated] = await query('SELECT * FROM jam_operasional ORDER BY id DESC LIMIT 1');
   res.json({ success: true, message: 'Jam operasional berhasil diperbarui', data: updated });
-});
+}));
 
 module.exports = router;

@@ -1,94 +1,111 @@
 const express = require('express');
-const db = require('../database');
+const { query, asyncHandler } = require('../database');
 const router = express.Router();
 
-// ─── GET semua koleksi ────────────────────────────────────────────────────────
-router.get('/', (req, res) => {
+router.get('/', asyncHandler(async (req, res) => {
   const { search, kategori, status, page = 1, limit = 20 } = req.query;
-  let query = 'SELECT * FROM koleksi WHERE 1=1';
+  let where = ' FROM koleksi WHERE 1=1';
   const params = [];
 
   if (search) {
-    query += ' AND (nama LIKE ? OR kode LIKE ? OR sub_deskripsi LIKE ? OR lokasi LIKE ?)';
-    const s = `%${search}%`;
-    params.push(s, s, s, s);
+    where += ' AND (nama LIKE ? OR kode LIKE ? OR sub_deskripsi LIKE ? OR lokasi LIKE ?)';
+    const value = `%${search}%`;
+    params.push(value, value, value, value);
   }
   if (kategori && kategori !== 'Semua Kategori') {
-    query += ' AND kategori = ?';
+    where += ' AND kategori = ?';
     params.push(kategori);
   }
   if (status && status !== 'Semua Status') {
-    query += ' AND status = ?';
+    where += ' AND status = ?';
     params.push(status);
   }
 
-  const total = db.prepare(query.replace('SELECT *', 'SELECT COUNT(*) as c')).get(...params).c;
-  query += ' ORDER BY id ASC LIMIT ? OFFSET ?';
-  params.push(Number(limit), (Number(page) - 1) * Number(limit));
-
-  const koleksi = db.prepare(query).all(...params);
+  const [{ total }] = await query(`SELECT COUNT(*) AS total${where}`, params);
+  const pageNumber = Number(page);
+  const pageSize = Number(limit);
+  const data = await query(
+    `SELECT *${where} ORDER BY id ASC LIMIT ? OFFSET ?`,
+    [...params, pageSize, (pageNumber - 1) * pageSize],
+  );
   res.json({
     success: true,
-    data: koleksi,
-    pagination: { total, page: Number(page), limit: Number(limit), totalPages: Math.ceil(total / limit) }
+    data,
+    pagination: { total, page: pageNumber, limit: pageSize, totalPages: Math.ceil(total / pageSize) },
   });
-});
+}));
 
-// ─── GET statistik koleksi ────────────────────────────────────────────────────
-router.get('/stats', (req, res) => {
-  const total = db.prepare("SELECT COUNT(*) as c FROM koleksi").get().c;
-  const dipamerkan = db.prepare("SELECT COUNT(*) as c FROM koleksi WHERE status = 'DIPAMERKAN'").get().c;
-  const restorasi = db.prepare("SELECT COUNT(*) as c FROM koleksi WHERE status = 'RESTORASI'").get().c;
-  const disimpan = db.prepare("SELECT COUNT(*) as c FROM koleksi WHERE status = 'SIMPAN'").get().c;
-  res.json({ success: true, data: { total, dipamerkan, restorasi, disimpan } });
-});
+router.get('/stats', asyncHandler(async (_req, res) => {
+  const [stats] = await query(`
+    SELECT COUNT(*) AS total,
+      SUM(status = 'DIPAMERKAN') AS dipamerkan,
+      SUM(status = 'RESTORASI') AS restorasi,
+      SUM(status = 'SIMPAN') AS disimpan
+    FROM koleksi
+  `);
+  res.json({
+    success: true,
+    data: {
+      total: Number(stats.total),
+      dipamerkan: Number(stats.dipamerkan || 0),
+      restorasi: Number(stats.restorasi || 0),
+      disimpan: Number(stats.disimpan || 0),
+    },
+  });
+}));
 
-// ─── GET satu koleksi ─────────────────────────────────────────────────────────
-router.get('/:id', (req, res) => {
-  const item = db.prepare('SELECT * FROM koleksi WHERE id = ?').get(req.params.id);
-  if (!item) return res.status(404).json({ success: false, message: 'Koleksi tidak ditemukan' });
+router.get('/:id', asyncHandler(async (req, res) => {
+  const [item] = await query('SELECT * FROM koleksi WHERE id = ?', [req.params.id]);
+  if (!item) {
+    res.status(404).json({ success: false, message: 'Koleksi tidak ditemukan' });
+    return;
+  }
   res.json({ success: true, data: item });
-});
+}));
 
-// ─── POST tambah koleksi (admin) ──────────────────────────────────────────────
-router.post('/', (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const { nama, sub_deskripsi, deskripsi_lengkap, kategori, tahun, lokasi, status, image_url } = req.body;
   if (!nama || !kategori) {
-    return res.status(400).json({ success: false, message: 'Nama dan kategori wajib diisi' });
+    res.status(400).json({ success: false, message: 'Nama dan kategori wajib diisi' });
+    return;
   }
 
-  // Generate kode inventaris otomatis
-  const last = db.prepare("SELECT kode FROM koleksi ORDER BY id DESC LIMIT 1").get();
-  let nextNum = 1;
-  if (last) {
-    const match = last.kode.match(/(\d+)$/);
-    if (match) nextNum = parseInt(match[1]) + 1;
-  }
+  const [last] = await query('SELECT kode FROM koleksi ORDER BY id DESC LIMIT 1');
+  const match = last?.kode.match(/(\d+)$/);
+  const nextNum = match ? Number.parseInt(match[1], 10) + 1 : 1;
   const kode = `#INV-MB-${String(nextNum).padStart(3, '0')}`;
-
-  const result = db.prepare(`
+  const result = await query(`
     INSERT INTO koleksi (kode, nama, sub_deskripsi, deskripsi_lengkap, kategori, tahun, lokasi, status, image_url)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(kode, nama, sub_deskripsi || '', deskripsi_lengkap || '', kategori,
-         tahun || '', lokasi || '', status || 'DIPAMERKAN', image_url || null);
-
-  const newItem = db.prepare('SELECT * FROM koleksi WHERE id = ?').get(result.lastInsertRowid);
+  `, [
+    kode,
+    nama,
+    sub_deskripsi || '',
+    deskripsi_lengkap || '',
+    kategori,
+    tahun || '',
+    lokasi || '',
+    status || 'DIPAMERKAN',
+    image_url || null,
+  ]);
+  const [newItem] = await query('SELECT * FROM koleksi WHERE id = ?', [result.insertId]);
   res.status(201).json({ success: true, message: 'Koleksi berhasil ditambahkan', data: newItem });
-});
+}));
 
-// ─── PUT edit koleksi (admin) ─────────────────────────────────────────────────
-router.put('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM koleksi WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, message: 'Koleksi tidak ditemukan' });
+router.put('/:id', asyncHandler(async (req, res) => {
+  const [existing] = await query('SELECT * FROM koleksi WHERE id = ?', [req.params.id]);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Koleksi tidak ditemukan' });
+    return;
+  }
 
   const { nama, sub_deskripsi, deskripsi_lengkap, kategori, tahun, lokasi, status, image_url } = req.body;
-  db.prepare(`
+  await query(`
     UPDATE koleksi SET
       nama = ?, sub_deskripsi = ?, deskripsi_lengkap = ?, kategori = ?,
-      tahun = ?, lokasi = ?, status = ?, image_url = ?,
-      updated_at = datetime('now','localtime')
+      tahun = ?, lokasi = ?, status = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
-  `).run(
+  `, [
     nama || existing.nama,
     sub_deskripsi ?? existing.sub_deskripsi,
     deskripsi_lengkap ?? existing.deskripsi_lengkap,
@@ -97,19 +114,21 @@ router.put('/:id', (req, res) => {
     lokasi ?? existing.lokasi,
     status || existing.status,
     image_url ?? existing.image_url,
-    req.params.id
-  );
+    req.params.id,
+  ]);
 
-  const updated = db.prepare('SELECT * FROM koleksi WHERE id = ?').get(req.params.id);
+  const [updated] = await query('SELECT * FROM koleksi WHERE id = ?', [req.params.id]);
   res.json({ success: true, message: 'Koleksi berhasil diperbarui', data: updated });
-});
+}));
 
-// ─── DELETE koleksi (admin) ───────────────────────────────────────────────────
-router.delete('/:id', (req, res) => {
-  const existing = db.prepare('SELECT * FROM koleksi WHERE id = ?').get(req.params.id);
-  if (!existing) return res.status(404).json({ success: false, message: 'Koleksi tidak ditemukan' });
-  db.prepare('DELETE FROM koleksi WHERE id = ?').run(req.params.id);
+router.delete('/:id', asyncHandler(async (req, res) => {
+  const [existing] = await query('SELECT * FROM koleksi WHERE id = ?', [req.params.id]);
+  if (!existing) {
+    res.status(404).json({ success: false, message: 'Koleksi tidak ditemukan' });
+    return;
+  }
+  await query('DELETE FROM koleksi WHERE id = ?', [req.params.id]);
   res.json({ success: true, message: 'Koleksi berhasil dihapus' });
-});
+}));
 
 module.exports = router;
