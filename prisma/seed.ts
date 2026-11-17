@@ -1,26 +1,34 @@
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Memulai proses seeding data...');
+  const username = 'admin@museum.com';
+  const password = process.env.ADMIN_INITIAL_PASSWORD;
 
-  // Hapus data lama jika ada (opsional untuk reset)
-  await prisma.admin.deleteMany();
+  if (!password) {
+    throw new Error('ADMIN_INITIAL_PASSWORD wajib diatur di .env sebelum menjalankan seeder');
+  }
 
-  // Buat akun admin default
-  const hashedPassword = await bcrypt.hash('password123', 10);
-  await prisma.admin.create({
-    data: {
-      username: 'admin',
-      passwordHash: hashedPassword,
+  const passwordHash = await bcrypt.hash(password, 10);
+  await prisma.admin.upsert({
+    where: { username },
+    update: {
+      passwordHash,
       nama: 'Administrator',
-      role: 'ADMIN',
+      role: 'SUPERADMIN',
+    },
+    create: {
+      username,
+      passwordHash,
+      nama: 'Administrator',
+      role: 'SUPERADMIN',
     },
   });
 
-  console.log('Seeding data berhasil ditambahkan!');
+  console.log(`Akun admin ${username} berhasil disiapkan.`);
 }
 
 main()

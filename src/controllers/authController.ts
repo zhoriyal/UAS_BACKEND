@@ -192,6 +192,19 @@ export const login = asyncHandler(async (req, res) => {
   });
 });
 
+export const forgotPassword = asyncHandler(async (req, res) => {
+  const body = getBody(req);
+  if (!isValidEmail(body.email)) {
+    res.status(400).json({ success: false, message: 'Alamat email valid wajib diisi' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    message: 'Jika alamat email terdaftar, instruksi reset kata sandi telah dikirim.',
+  });
+});
+
 export const logout: RequestHandler = (_req, res) => {
   res.json({ success: true, message: 'Logout berhasil' });
 };

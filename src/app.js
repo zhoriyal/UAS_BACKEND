@@ -9,6 +9,7 @@ const koleksiRoutes   = require('./routes/koleksi');
 const ulasanRoutes    = require('./routes/ulasan');
 const informasiRoutes = require('./routes/informasi');
 const dashboardRoutes = require('./routes/dashboard');
+const aiRoutes        = require('./routes/ai');
 
 const app = express();
 app.use(cors());
@@ -17,11 +18,39 @@ app.use('/api/auth', authRoutes);
 
 const PORT = process.env.PORT || 3001;
 
+if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGINS?.trim()) {
+  throw new Error('CORS_ORIGINS wajib diatur di production ke origin frontend yang diizinkan');
+}
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || 'http://localhost:3000,http://127.0.0.1:3000,https://museum-brawijaya-admin.vercel.app')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+const isLocalDevelopmentOrigin = (origin) => {
+  if (!origin) return true;
+
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase();
+    return hostname === 'localhost'
+      || hostname === '127.0.0.1'
+      || hostname === '::1'
+      || hostname.endsWith('.local');
+  } catch {
+    return false;
+  }
+};
+
 // ─── MIDDLEWARE ──────────────────────────────────────────────────────────────
 app.use(cors({
   origin: (origin, callback) => {
-    // Mengizinkan semua origin dari localhost (Flutter web random port, Next.js, emulator)
-    callback(null, true);
+    const isAllowedLocalOrigin = process.env.NODE_ENV !== 'production'
+      && isLocalDevelopmentOrigin(origin);
+    if (!origin || allowedOrigins.has(origin) || isAllowedLocalOrigin) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS origin tidak diizinkan: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -41,6 +70,7 @@ app.use((req, _res, next) => {
 app.use('/api/auth',        authRoutes);
 app.use('/api/auth/user',   authRoutes); // <--- TAMBAHAN INI SUPAYA /api/auth/user/login VALID
 app.use('/api/tiket',      tiketRoutes);
+app.use('/api/ai',         aiRoutes);
 app.use('/api/koleksi',    koleksiRoutes);
 app.use('/api/ulasan',     ulasanRoutes);
 app.use('/api/informasi',  informasiRoutes);
@@ -55,6 +85,7 @@ app.get('/', (_req, res) => {
     endpoints: {
       auth:       '/api/auth',
       tiket:      '/api/tiket',
+      ai:         '/api/ai',
       koleksi:    '/api/koleksi',
       ulasan:     '/api/ulasan',
       informasi:  '/api/informasi',
@@ -97,6 +128,7 @@ initializeDatabase()
       console.log(`║  • GET  /api/ulasan                              ║`);
       console.log(`║  • POST /api/ulasan                              ║`);
       console.log(`║  • POST /api/ulasan/:id/reply                    ║`);
+      console.log(`║  • PUT  /api/ulasan/:id/reply (admin)            ║`);
       console.log(`║  • GET  /api/dashboard/summary                   ║`);
       console.log('╚══════════════════════════════════════════════════╝');
       console.log('');

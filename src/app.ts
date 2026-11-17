@@ -10,11 +10,23 @@ import prisma from './lib/prisma';
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
+const paymentRoutes = require('./routes/payment');
 
 getJwtSecret();
 
 if (process.env.NODE_ENV === 'production' && !process.env.CORS_ORIGINS?.trim()) {
   throw new Error('CORS_ORIGINS wajib diatur di production ke origin frontend yang diizinkan');
+}
+if (process.env.NODE_ENV === 'production') {
+  if (process.env.MIDTRANS_IS_PRODUCTION !== 'true') {
+    throw new Error('MIDTRANS_IS_PRODUCTION harus bernilai true di production');
+  }
+  if (!process.env.MIDTRANS_SERVER_KEY || !process.env.MIDTRANS_CLIENT_KEY) {
+    throw new Error('MIDTRANS_SERVER_KEY dan MIDTRANS_CLIENT_KEY wajib diatur di production');
+  }
+  if (process.env.MIDTRANS_SERVER_KEY.startsWith('SB-')) {
+    throw new Error('MIDTRANS_SERVER_KEY production tidak boleh menggunakan key Sandbox');
+  }
 }
 
 const trustProxyHops = process.env.TRUST_PROXY_HOPS === undefined
@@ -72,8 +84,12 @@ app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use('/api/auth', authRoutes);
 app.use('/api/auth/user', authRoutes);
 app.use('/api/tiket', require('./routes/tiket'));
-app.use('/api/payment', require('./routes/payment'));
-app.use('/api/koleksi', require('./routes/koleksi'));
+app.use('/api/payment', paymentRoutes);
+app.use('/api/tickets', require('./routes/tickets'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/payments', paymentRoutes);
+app.use('/api/ai', require('./routes/ai'));
+app.use('/api/koleksi',    require('./routes/koleksi'));
 app.use('/api/ulasan', require('./routes/ulasan'));
 app.use('/api/informasi', require('./routes/informasi'));
 app.use('/api/dashboard', require('./routes/dashboard'));
@@ -86,6 +102,9 @@ app.get('/', (_req, res) => {
     endpoints: {
       auth: '/api/auth',
       tiket: '/api/tiket',
+      tickets: '/api/tickets',
+      payments: '/api/payments',
+      ai: '/api/ai',
       koleksi: '/api/koleksi',
       ulasan: '/api/ulasan',
       informasi: '/api/informasi',

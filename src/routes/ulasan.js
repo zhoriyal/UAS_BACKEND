@@ -1,6 +1,10 @@
 const express = require('express');
 const { query, asyncHandler } = require('../database');
 const router = express.Router();
+const authMiddlewareModule = require('../middleware/authMiddleware');
+const authMiddleware = authMiddlewareModule.default || authMiddlewareModule;
+const requireRoleModule = require('../middleware/requireRole');
+const requireRole = requireRoleModule.requireRole || requireRoleModule.default || requireRoleModule;
 
 router.get('/', asyncHandler(async (req, res) => {
   const { search, rating, status, page = 1, limit = 10 } = req.query;
@@ -52,28 +56,33 @@ router.get('/:id', asyncHandler(async (req, res) => {
 }));
 
 router.post('/', asyncHandler(async (req, res) => {
-  const { nama, rating, comment, category } = req.body;
-  if (!nama || !rating || !comment) {
-    res.status(400).json({ success: false, message: 'Nama, rating, dan komentar wajib diisi' });
+  const { nama, avatar_initial, avatar_color, rating, comment, category } = req.body;
+  const reviewName = typeof nama === 'string' && nama.trim() ? nama.trim() : 'Pengunjung';
+  if (!Number.isInteger(Number(rating)) || !comment) {
+    res.status(400).json({ success: false, message: 'Rating dan komentar wajib diisi' });
     return;
   }
-  if (rating < 1 || rating > 5) {
+  const reviewRating = Number(rating);
+  if (reviewRating < 1 || reviewRating > 5) {
     res.status(400).json({ success: false, message: 'Rating harus antara 1 dan 5' });
     return;
   }
-  if (comment.trim().length < 10) {
+  if (typeof comment !== 'string' || comment.trim().length < 10) {
     res.status(400).json({ success: false, message: 'Komentar minimal 10 karakter' });
     return;
   }
 
-  const initial = nama.trim()[0]?.toUpperCase() || '?';
-  const colors = ['#3F5243', '#6B4C2A', '#7A5C3C', '#4A6670', '#5E4266', '#436B5A'];
-  const [count] = await query('SELECT COUNT(*) AS total FROM ulasan');
-  const color = colors[Number(count.total) % colors.length];
   const result = await query(`
-    INSERT INTO ulasan (nama, avatar_initial, avatar_color, category, rating, comment, reply, reply_date)
-    VALUES (?, ?, ?, ?, ?, ?, '', '')
-  `, [nama, initial, color, category || 'Kunjungan Umum', rating, comment.trim()]);
+    INSERT INTO ulasan (nama, avatar_initial, avatar_color, category, rating, comment, reply, reply_date, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, '', '', NOW())
+  `, [
+    reviewName,
+    avatar_initial || 'P',
+    avatar_color || '#2C4A2C',
+    category || 'Umum',
+    reviewRating,
+    comment.trim(),
+  ]);
   const [newUlasan] = await query('SELECT * FROM ulasan WHERE id = ?', [result.insertId]);
   res.status(201).json({
     success: true,
@@ -82,9 +91,9 @@ router.post('/', asyncHandler(async (req, res) => {
   });
 }));
 
-router.post('/:id/reply', asyncHandler(async (req, res) => {
-  const { reply } = req.body;
-  if (!reply || reply.trim() === '') {
+const saveReply = asyncHandler(async (req, res) => {
+  const reply = req.body?.reply;
+  if (typeof reply !== 'string' || reply.trim() === '') {
     res.status(400).json({ success: false, message: 'Balasan tidak boleh kosong' });
     return;
   }
@@ -105,7 +114,10 @@ router.post('/:id/reply', asyncHandler(async (req, res) => {
   ]);
   const [updated] = await query('SELECT * FROM ulasan WHERE id = ?', [req.params.id]);
   res.json({ success: true, message: 'Balasan berhasil dikirim', data: updated });
-}));
+});
+
+router.post('/:id/reply', authMiddleware, requireRole(['ADMIN', 'SUPERADMIN', 'STAFF']), saveReply);
+router.put('/:id/reply', authMiddleware, requireRole(['ADMIN', 'SUPERADMIN', 'STAFF']), saveReply);
 
 router.delete('/:id', asyncHandler(async (req, res) => {
   const [ulasan] = await query('SELECT * FROM ulasan WHERE id = ?', [req.params.id]);

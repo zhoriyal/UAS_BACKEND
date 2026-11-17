@@ -1,5 +1,9 @@
+const path = require('node:path');
+require('dotenv').config({ path: path.resolve(__dirname, '..', '.env') });
+
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
+const fs = require('node:fs');
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
@@ -11,6 +15,20 @@ if (connectionUrl.protocol !== 'mysql:') {
   throw new Error('DATABASE_URL harus menggunakan protokol mysql://');
 }
 
+const sslAcceptance = connectionUrl.searchParams.get('sslaccept');
+if (sslAcceptance && !['strict', 'accept_invalid_certs'].includes(sslAcceptance)) {
+  throw new Error('Parameter DATABASE_URL sslaccept harus strict atau accept_invalid_certs');
+}
+const sslCertPath = connectionUrl.searchParams.get('sslcert');
+const ssl = sslAcceptance || sslCertPath
+  ? {
+      rejectUnauthorized: sslAcceptance !== 'accept_invalid_certs',
+      ...(sslCertPath
+        ? { ca: fs.readFileSync(path.resolve(__dirname, '../prisma', sslCertPath), 'utf8') }
+        : {}),
+    }
+  : undefined;
+
 const pool = mysql.createPool({
   host: connectionUrl.hostname,
   port: Number(connectionUrl.port) || 3306,
@@ -21,6 +39,7 @@ const pool = mysql.createPool({
   connectionLimit: Number(process.env.DB_CONNECTION_LIMIT) || 10,
   queueLimit: 0,
   timezone: 'Z',
+  ssl,
 });
 
 async function query(sql, params = []) {

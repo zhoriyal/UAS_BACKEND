@@ -3,6 +3,15 @@ const { query } = require('../database');
 const { logger } = require('../logger');
 const { sendTicketNotification } = require('../emailService');
 
+function getOrderId(bookingId) {
+  return `MB-${bookingId.replace(/^#/, '').replace(/[^A-Za-z0-9_-]/g, '-')}`;
+}
+
+function isOrderIdForBooking(bookingId, orderId) {
+  const legacyOrderId = `MB-${bookingId.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+  return getOrderId(bookingId) === orderId || legacyOrderId === orderId;
+}
+
 exports.createTransaction = async (req, res) => {
   const { bookingId } = req.body;
   if (typeof bookingId !== 'string' || !bookingId.trim()) {
@@ -12,10 +21,13 @@ exports.createTransaction = async (req, res) => {
     });
   }
 
-  const serverKey = process.env.MIDTRANS_SERVER_KEY;
-  const clientKey = process.env.MIDTRANS_CLIENT_KEY;
-  if (!serverKey || !clientKey) {
-    logger.error('Konfigurasi Midtrans belum lengkap');
+  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+  const serverKey = process.env.MIDTRANS_SERVER_KEY?.trim() || '';
+  const clientKey = process.env.MIDTRANS_CLIENT_KEY?.trim() || '';
+  const serverKeyPrefix = isProduction ? 'Mid-server-' : 'SB-Mid-server-';
+  const clientKeyPrefix = isProduction ? 'Mid-client-' : 'SB-Mid-client-';
+  if (!serverKey.startsWith(serverKeyPrefix) || !clientKey.startsWith(clientKeyPrefix)) {
+    logger.error({ isProduction }, 'Key Midtrans tidak lengkap atau tidak sesuai dengan mode yang dipilih');
     return res.status(503).json({
       success: false,
       message: 'Layanan pembayaran belum tersedia',
@@ -50,11 +62,11 @@ exports.createTransaction = async (req, res) => {
     }
 
     const snap = new midtransClient.Snap({
-      isProduction: false,
+      isProduction,
       serverKey,
       clientKey,
     });
-    const orderId = `MB-${booking.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+    const orderId = getOrderId(booking.id);
     const transaction = await snap.createTransaction({
       transaction_details: {
         order_id: orderId,
@@ -75,6 +87,17 @@ exports.createTransaction = async (req, res) => {
       ],
     });
 
+    // --- TAMBAHAN: SIMPAN / CATAT KE TABEL TRANSACTIONS DI PHPMYADMIN ---
+    await query(
+      `INSERT INTO transactions (ticket_id, order_id, amount, payment_method, status, snap_token, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE snap_token = ?, status = 'pending', created_at = NOW()`,
+      [booking.id, orderId, grossAmount, 'QRIS / Transfer', 'pending', transaction.token, transaction.token]
+    ).catch((err) => {
+      logger.warn({ err, orderId }, 'Gagal mencatat transaksi awal ke database');
+    });
+    // -----------------------------------------------------------------
+
     return res.status(200).json({
       success: true,
       message: 'Snap token berhasil dibuat',
@@ -82,7 +105,16 @@ exports.createTransaction = async (req, res) => {
       redirect_url: transaction.redirect_url,
     });
   } catch (error) {
-    logger.error({ err: error, bookingId: bookingId.trim() }, 'Gagal membuat transaksi Midtrans');
+    const apiResponse = error && typeof error === 'object' ? error.ApiResponse : undefined;
+    logger.error({
+      err: error,
+      message: error instanceof Error ? error.message : String(error),
+      statusCode: error && typeof error === 'object'
+        ? error.httpStatusCode || error.statusCode || apiResponse?.status_code
+        : undefined,
+      midtransResponse: apiResponse,
+      bookingId: bookingId.trim(),
+    }, 'Gagal membuat transaksi Midtrans');
     return res.status(500).json({
       success: false,
       message: 'Gagal membuat transaksi pembayaran',
@@ -99,9 +131,11 @@ exports.handleNotification = async (req, res) => {
     });
   }
 
-  const serverKey = process.env.MIDTRANS_SERVER_KEY;
-  if (!serverKey) {
-    logger.error('Konfigurasi Midtrans belum lengkap');
+  const isProduction = process.env.MIDTRANS_IS_PRODUCTION === 'true';
+  const serverKey = process.env.MIDTRANS_SERVER_KEY?.trim() || '';
+  const serverKeyPrefix = isProduction ? 'Mid-server-' : 'SB-Mid-server-';
+  if (!serverKey.startsWith(serverKeyPrefix)) {
+    logger.error({ isProduction }, 'Server key Midtrans tidak lengkap atau tidak sesuai dengan mode yang dipilih');
     return res.status(503).json({
       success: false,
       message: 'Layanan pembayaran belum tersedia',
@@ -110,23 +144,30 @@ exports.handleNotification = async (req, res) => {
 
   try {
     const coreApi = new midtransClient.CoreApi({
-      isProduction: false,
+      isProduction,
       serverKey,
     });
     const transaction = await coreApi.transaction.notification(notification);
-    const { order_id: orderId, transaction_status: transactionStatus, fraud_status: fraudStatus } = transaction;
+    const {
+      order_id: orderId,
+      transaction_status: transactionStatus,
+      fraud_status: fraudStatus,
+      payment_type: paymentType,
+      transaction_id: transactionId
+    } = transaction;
 
     if (typeof orderId !== 'string' || !orderId.startsWith('MB-')) {
       logger.warn({ orderId }, 'Notifikasi Midtrans memiliki order_id yang tidak dikenal');
       return res.status(400).json({ success: false, message: 'order_id tidak valid' });
     }
 
-    const bookingId = `#${orderId.slice('MB-'.length)}`;
+    const bookingSuffix = orderId.slice('MB-'.length).replace(/^-/, '');
+    const bookingId = `#${bookingSuffix}`;
     const [booking] = await query(
       'SELECT id, nama, email, total_tiket, total_biaya, visit_date, sesi, is_mancanegara, status FROM ticket_bookings WHERE id = ?',
       [bookingId],
     );
-    if (!booking || `MB-${booking.id.replace(/[^A-Za-z0-9_-]/g, '-')}` !== orderId) {
+    if (!booking || !isOrderIdForBooking(booking.id, orderId)) {
       logger.warn({ orderId }, 'Booking untuk notifikasi Midtrans tidak ditemukan');
       return res.status(404).json({ success: false, message: 'Pemesanan tidak ditemukan' });
     }
@@ -138,10 +179,13 @@ exports.handleNotification = async (req, res) => {
     }
 
     let nextStatus = null;
+    let dbStatusTransaction = 'pending';
     if (transactionStatus === 'settlement' || (transactionStatus === 'capture' && fraudStatus === 'accept')) {
       nextStatus = 'LUNAS';
-    } else if (transactionStatus === 'cancel' || transactionStatus === 'expire') {
+      dbStatusTransaction = 'success';
+    } else if (transactionStatus === 'cancel' || transactionStatus === 'expire' || transactionStatus === 'deny') {
       nextStatus = 'BATAL';
+      dbStatusTransaction = 'failed';
     }
 
     let statusChanged = false;
@@ -158,6 +202,17 @@ exports.handleNotification = async (req, res) => {
       );
       statusChanged = result.affectedRows > 0;
     }
+
+    // --- TAMBAHAN: UPDATE TABEL TRANSACTIONS DI PHPMYADMIN OTOMATIS ---
+    await query(
+      `UPDATE transactions
+       SET status = ?, payment_method = ?, provider_transaction_id = ?
+       WHERE order_id = ?`,
+      [dbStatusTransaction, paymentType || 'QRIS / Transfer', transactionId, orderId]
+    ).catch((err) => {
+      logger.warn({ err, orderId }, 'Gagal memperbarui tabel transactions di database');
+    });
+    // -----------------------------------------------------------------
 
     if (statusChanged && nextStatus === 'LUNAS') {
       sendTicketNotification({

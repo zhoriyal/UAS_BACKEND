@@ -7,6 +7,12 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
 model Admin {
   id           Int      @id @default(autoincrement())
   username     String   @unique
@@ -29,6 +35,7 @@ model User {
   role         String   @default("USER")
   createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  tickets      Ticket[]
 
   @@map("users")
 }
@@ -67,8 +74,43 @@ model TicketBooking {
   checkedInAt     DateTime? @map("checked_in_at") @db.DateTime(3)
   createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
+  ticket          Ticket?
 
   @@map("ticket_bookings")
+}
+
+model Ticket {
+  id            String        @id @default(uuid()) @db.Char(36)
+  bookingId     String        @unique @map("booking_id")
+  orderId       String        @unique @map("order_id")
+  userId        Int?          @map("user_id")
+  userName      String        @map("user_name")
+  amount        Int
+  paymentMethod String        @map("payment_method")
+  status        PaymentStatus @default(PENDING)
+  pdfUrl        String?       @map("pdf_url")
+  createdAt     DateTime      @default(now()) @map("created_at") @db.DateTime(3)
+  booking       TicketBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user          User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  transaction   Transaction?
+
+  @@index([userId])
+  @@map("tickets")
+}
+
+model Transaction {
+  id                    String        @id @default(uuid()) @db.Char(36)
+  ticketId              String        @unique @map("ticket_id") @db.Char(36)
+  orderId               String        @unique @map("order_id")
+  amount                Int
+  paymentMethod         String        @map("payment_method")
+  status                PaymentStatus @default(PENDING)
+  providerTransactionId String?       @map("provider_transaction_id")
+  snapToken             String?       @map("snap_token")
+  createdAt             DateTime      @default(now()) @map("created_at") @db.DateTime(3)
+  ticket                Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
 }
 
 model Koleksi {
@@ -144,4 +186,17 @@ model PasswordReset {
   createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
 
   @@map("password_resets")
+}
+
+model ArtifactQuizResult {
+  id              Int      @id @default(autoincrement())
+  visitorName     String?  @map("visitor_name") @db.VarChar(191)
+  answers         String   @db.Text
+  matchedArtifact String   @map("matched_artifact") @db.VarChar(191)
+  aiExplanation   String   @map("ai_explanation") @db.LongText
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(3)
+
+  @@index([createdAt])
+  @@index([matchedArtifact])
+  @@map("artifact_quiz_results")
 }

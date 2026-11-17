@@ -1,7 +1,10 @@
 const express = require('express');
 const { query, asyncHandler } = require('../database');
 const { sendTicketNotification } = require('../emailService');
+const authMiddleware = require('../middleware/authMiddleware.js');
+const requireRole = require('../middleware/requireRole.js');
 const router = express.Router();
+const adminOnly = requireRole(['ADMIN', 'SUPERADMIN', 'STAFF']);
 
 router.get('/categories', asyncHandler(async (_req, res) => {
   const categories = await query('SELECT * FROM ticket_categories ORDER BY id ASC');
@@ -161,7 +164,7 @@ router.post('/bookings', asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, message: 'Pemesanan berhasil dibuat', data: newBooking });
 }));
 
-router.put(['/bookings/:id/status', '/bookings/status'], asyncHandler(async (req, res) => {
+router.put(['/bookings/:id/status', '/bookings/status'], authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   const { status } = req.body;
   const rawId = req.params.id || req.body.id || req.query.id;
   if (!['MENUNGGU', 'LUNAS', 'BATAL'].includes(status)) {
@@ -205,7 +208,7 @@ router.put(['/bookings/:id/status', '/bookings/status'], asyncHandler(async (req
   res.json({ success: true, message: 'Status berhasil diperbarui', data: updated });
 }));
 
-router.put('/bookings/:id/checkin', asyncHandler(async (req, res) => {
+router.put('/bookings/:id/checkin', authMiddleware, adminOnly, asyncHandler(async (req, res) => {
   const [booking] = await query('SELECT * FROM ticket_bookings WHERE id = ?', [req.params.id]);
   if (!booking) {
     res.status(404).json({ success: false, message: 'Pemesanan tidak ditemukan' });
@@ -216,12 +219,22 @@ router.put('/bookings/:id/checkin', asyncHandler(async (req, res) => {
     return;
   }
 
-  await query(`
+  if (Number(booking.checked_in)) {
+    res.status(409).json({ success: false, message: 'Tiket sudah check-in' });
+    return;
+  }
+
+  const result = await query(`
     UPDATE ticket_bookings
-    SET checked_in = 1, status = 'LUNAS', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `, [req.params.id]);
-  const [updated] = await query('SELECT * FROM ticket_bookings WHERE id = ?', [req.params.id]);
+    SET checked_in = 1, checked_in_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'LUNAS' AND checked_in = 0
+  `, [booking.id]);
+  if (result.affectedRows !== 1) {
+    res.status(409).json({ success: false, message: 'Status tiket berubah atau tiket sudah check-in' });
+    return;
+  }
+
+  const [updated] = await query('SELECT * FROM ticket_bookings WHERE id = ?', [booking.id]);
   res.json({ success: true, message: 'Check-in berhasil', data: updated });
 }));
 

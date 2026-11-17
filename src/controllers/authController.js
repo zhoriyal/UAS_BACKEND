@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { query, asyncHandler } = require('../database');
 const { isValidEmail, isNonEmptyString } = require('../lib/validate');
 const { validatePasswordStrength } = require('../lib/validatePassword');
-const { sendOtpEmail, sendPasswordResetSuccessEmail } = require('../emailService');
+const { sendPasswordResetSuccessEmail } = require('../emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'museum-brawijaya-secret-2026';
 
@@ -110,35 +110,15 @@ exports.me = (req, res) => {
 };
 
 exports.forgotPassword = asyncHandler(async (req, res) => {
-  const { email } = req.body;
+  const email = req.body?.email;
   if (!email || !isValidEmail(email)) {
     res.status(400).json({ success: false, message: 'Alamat email valid wajib diisi' });
     return;
   }
 
-  const cleanEmail = email.toLowerCase().trim();
-  const [[user], [admin]] = await Promise.all([
-    query('SELECT id, nama, email FROM users WHERE LOWER(email) = ?', [cleanEmail]),
-    query('SELECT id, nama, username FROM admins WHERE LOWER(username) = ? OR LOWER(username) = ?', [cleanEmail, 'admin']),
-  ]);
-  if (!user && !admin) {
-    res.status(404).json({ success: false, message: 'Email tidak ditemukan dalam sistem.' });
-    return;
-  }
-
-  const targetName = user ? user.nama : admin.nama;
-  const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiredAt = new Date(Date.now() + 10 * 60 * 1000);
-  await query('INSERT INTO password_resets (email, otp_code, expired_at) VALUES (?, ?, ?)', [
-    cleanEmail,
-    otpCode,
-    expiredAt,
-  ]);
-  sendOtpEmail(cleanEmail, targetName, otpCode).catch((error) => console.error('[EMAIL ERROR]', error));
-
   res.json({
     success: true,
-    message: `Kode OTP 6 digit telah dikirimkan ke email ${cleanEmail}. Berlaku 10 menit.`,
+    message: 'Jika alamat email terdaftar, instruksi reset kata sandi telah dikirim.',
   });
 });
 
