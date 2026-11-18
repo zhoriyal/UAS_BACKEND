@@ -58,11 +58,13 @@ const isLocalDevelopmentOrigin = (origin: string | undefined): boolean => {
 
 app.use(requestLogger);
 app.use(helmet());
-app.use(rateLimiter({
-  windowMs: 15 * 60_000,
-  maxRequests: 100,
-  message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
-}));
+if (process.env.NODE_ENV === 'production') {
+  app.use(rateLimiter({
+    windowMs: 15 * 60_000,
+    maxRequests: 100,
+    message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
+  }));
+}
 app.use(cors({
   origin: (origin, callback) => {
     const isAllowedLocalOrigin = process.env.NODE_ENV !== 'production'

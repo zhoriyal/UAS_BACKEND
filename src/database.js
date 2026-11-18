@@ -11,9 +11,7 @@ if (!databaseUrl) {
 }
 
 const connectionUrl = new URL(databaseUrl);
-if (connectionUrl.protocol !== 'mysql:') {
-  throw new Error('DATABASE_URL harus menggunakan protokol mysql://');
-}
+
 
 const sslAcceptance = connectionUrl.searchParams.get('sslaccept');
 if (sslAcceptance && !['strict', 'accept_invalid_certs'].includes(sslAcceptance)) {
