@@ -5,6 +5,7 @@
   "main": "src/app.ts",
   "scripts": {
     "start": "tsx src/app.ts",
+    "predev": "prisma generate",
     "dev": "tsx watch src/app.ts",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate deploy",
@@ -22,6 +23,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@prisma/client": "^6.19.0",
+    "@vercel/blob": "^2.9.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",

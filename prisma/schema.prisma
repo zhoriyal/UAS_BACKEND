@@ -19,6 +19,9 @@ model Admin {
   passwordHash String   @map("password_hash")
   nama         String
   role         String   @default("ADMIN")
+  avatarUrl    String?  @map("avatar_url") @db.VarChar(500)
+  jabatan      String?  @db.VarChar(120)
+  phone        String?  @db.VarChar(40)
   createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
 
@@ -30,8 +33,8 @@ model User {
   nama         String
   email        String   @unique
   passwordHash String?  @map("password_hash")
-  authProvider String   @default("local") @map("auth_provider")
-  avatarUrl    String?  @map("avatar_url")
+  authProvider String   @default("local") @map("auth_provider") @db.VarChar(50)
+  avatarUrl    String?  @map("avatar_url") @db.VarChar(500)
   role         String   @default("USER")
   createdAt    DateTime @default(now()) @map("created_at") @db.DateTime(3)
   updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime(3)
