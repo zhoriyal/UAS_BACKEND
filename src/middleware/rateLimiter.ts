@@ -17,6 +17,7 @@ export default function rateLimiter({
     statusCode: 429,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
+    skip: (req) => req.method === 'OPTIONS',
     handler: (_req, res) => {
       res.status(429).json({ success: false, message });
     },
