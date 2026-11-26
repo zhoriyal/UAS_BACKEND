@@ -4,6 +4,35 @@ import { asyncHandler } from '../database';
 
 const router = Router();
 
+function validateKoleksiFields(fields: {
+  nama?: unknown;
+  sub_deskripsi?: unknown;
+  tahun?: unknown;
+}): string | null {
+  const lettersOnly = /^[A-Za-z\s]+$/;
+  const numbersOnly = /^[0-9]+$/;
+
+  if (fields.nama !== undefined) {
+    const nama = String(fields.nama).trim();
+    if (nama && !lettersOnly.test(nama)) {
+      return 'Nama koleksi hanya boleh menggunakan huruf saja';
+    }
+  }
+  if (fields.sub_deskripsi !== undefined) {
+    const sub = String(fields.sub_deskripsi ?? '').trim();
+    if (sub && !lettersOnly.test(sub)) {
+      return 'Keterangan singkat hanya boleh menggunakan huruf saja';
+    }
+  }
+  if (fields.tahun !== undefined) {
+    const tahun = String(fields.tahun ?? '').trim();
+    if (tahun && !numbersOnly.test(tahun)) {
+      return 'Tahun / era hanya boleh menggunakan angka saja';
+    }
+  }
+  return null;
+}
+
 router.get(
   '/',
   asyncHandler(async (req: Request, res: Response) => {
@@ -77,6 +106,12 @@ router.post(
       return;
     }
 
+    const fieldError = validateKoleksiFields({ nama, sub_deskripsi, tahun });
+    if (fieldError) {
+      res.status(400).json({ success: false, message: fieldError });
+      return;
+    }
+
     const newItem = await koleksiModel.create({
       nama,
       sub_deskripsi,
@@ -111,6 +146,12 @@ router.put(
       status,
       image_url,
     } = req.body;
+
+    const fieldError = validateKoleksiFields({ nama, sub_deskripsi, tahun });
+    if (fieldError) {
+      res.status(400).json({ success: false, message: fieldError });
+      return;
+    }
 
     const updated = await koleksiModel.updateById(req.params.id, existing, {
       nama,

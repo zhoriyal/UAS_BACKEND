@@ -54,6 +54,14 @@ router.post(
       res.status(400).json({ success: false, message: 'badge, title, dan price wajib diisi' });
       return;
     }
+    const lettersOnly = /^[A-Za-z\s]+$/;
+    if (!lettersOnly.test(String(badge).trim()) || !lettersOnly.test(String(title).trim())) {
+      res.status(400).json({
+        success: false,
+        message: 'Label badge dan nama kategori tiket hanya boleh menggunakan huruf saja',
+      });
+      return;
+    }
     const newCategory = await tiketModel.createCategory({
       badge,
       badge_bg,
@@ -77,6 +85,13 @@ router.put(
       return;
     }
     const { badge, badge_bg, badge_color, title, price, kuota, status } = req.body;
+    if (title !== undefined && !/^[A-Za-z\s]+$/.test(String(title).trim())) {
+      res.status(400).json({
+        success: false,
+        message: 'Nama kategori tiket hanya boleh menggunakan huruf saja',
+      });
+      return;
+    }
     const updated = await tiketModel.updateCategory(id, existing, {
       badge,
       badge_bg,

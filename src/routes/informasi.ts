@@ -3,6 +3,7 @@ import { informasiModel } from '../models/informasiModel';
 import { asyncHandler } from '../database';
 
 const router = Router();
+const LETTERS_ONLY_REGEX = /^[A-Za-z\s]+$/;
 
 // Rute root alias untuk pengumuman
 router.get(
@@ -20,6 +21,10 @@ router.post(
     const { title, description, category, date, status } = req.body;
     if (!title || !category || !date) {
       res.status(400).json({ success: false, message: 'Judul, kategori, dan tanggal wajib diisi' });
+      return;
+    }
+    if (!LETTERS_ONLY_REGEX.test(String(title).trim())) {
+      res.status(400).json({ success: false, message: 'Judul pengumuman hanya boleh menggunakan huruf saja' });
       return;
     }
 
@@ -49,6 +54,10 @@ router.post(
     const { title, description, category, date, status } = req.body;
     if (!title || !category || !date) {
       res.status(400).json({ success: false, message: 'Judul, kategori, dan tanggal wajib diisi' });
+      return;
+    }
+    if (!LETTERS_ONLY_REGEX.test(String(title).trim())) {
+      res.status(400).json({ success: false, message: 'Judul pengumuman hanya boleh menggunakan huruf saja' });
       return;
     }
 
@@ -73,6 +82,10 @@ router.put(
     }
 
     const { title, description, category, date, status } = req.body;
+    if (title !== undefined && !LETTERS_ONLY_REGEX.test(String(title).trim())) {
+      res.status(400).json({ success: false, message: 'Judul pengumuman hanya boleh menggunakan huruf saja' });
+      return;
+    }
     const updated = await informasiModel.updatePengumuman(req.params.id, {
       title: title || existing.title,
       description: description ?? existing.description,
@@ -181,6 +194,10 @@ router.put(
     }
 
     const { title, description, category, date, status } = req.body;
+    if (title !== undefined && !LETTERS_ONLY_REGEX.test(String(title).trim())) {
+      res.status(400).json({ success: false, message: 'Judul pengumuman hanya boleh menggunakan huruf saja' });
+      return;
+    }
     const updated = await informasiModel.updatePengumuman(req.params.id, {
       title: title || existing.title,
       description: description ?? existing.description,
