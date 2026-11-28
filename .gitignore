@@ -2,5 +2,9 @@ node_modules
 .env
 .env.*
 !.env.example
+!.env.railway.example
 dist
 build
+uploads/
+prisma/data/*.db
+prisma/data/*.db-journal
