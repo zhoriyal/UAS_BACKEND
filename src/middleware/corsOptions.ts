@@ -70,7 +70,10 @@ export function createCorsOptions(
         && origin !== undefined
         && origin !== ''
         && isLocalDevelopmentOrigin(origin);
-      if (!origin || origins.has(origin) || isAllowedLocalOrigin) {
+      const isAllowedAdminDomain = Boolean(
+        origin && /^https:\/\/pbl-admin(?:-[a-z0-9-]+)?\.vercel\.app$/i.test(origin),
+      );
+      if (!origin || origins.has(origin) || isAllowedLocalOrigin || isAllowedAdminDomain) {
         callback(null, true);
         return;
       }
