@@ -20,10 +20,17 @@ if (!isSqliteUrl) {
   if (sslAcceptance && !['strict', 'accept_invalid_certs'].includes(sslAcceptance)) {
     throw new Error('Parameter DATABASE_URL sslaccept harus strict atau accept_invalid_certs');
   }
+  const sslMode = (connectionUrl.searchParams.get('ssl-mode') || connectionUrl.searchParams.get('sslmode') || '').toUpperCase();
   const sslCertPath = connectionUrl.searchParams.get('sslcert');
-  const ssl = sslAcceptance || sslCertPath
+  const needsSsl = Boolean(
+    sslAcceptance
+    || sslCertPath
+    || (sslMode && sslMode !== 'DISABLED')
+    || connectionUrl.hostname.includes('aivencloud.com'),
+  );
+  const ssl = needsSsl
     ? {
-        rejectUnauthorized: sslAcceptance !== 'accept_invalid_certs',
+        rejectUnauthorized: sslAcceptance === 'strict' && !connectionUrl.hostname.includes('aivencloud.com'),
         ...(sslCertPath
           ? { ca: fs.readFileSync(path.resolve(__dirname, '../prisma', sslCertPath), 'utf8') }
           : {}),
@@ -210,13 +217,17 @@ export async function initializeDatabase() {
     console.warn('[Database] Gagal menyiapkan tabel notifications:', err);
   }
 
-  const [adminCount] = await query<any[]>('SELECT COUNT(*) AS count FROM admins');
-  if (Number(adminCount?.count) === 0) {
-    const passwordHash = await bcrypt.hash(process.env.ADMIN_INITIAL_PASSWORD || 'admin123', 10);
-    await query(
-      'INSERT INTO admins (username, password_hash, nama, role) VALUES (?, ?, ?, ?)',
-      [process.env.ADMIN_INITIAL_USERNAME || 'admin', passwordHash, 'Administrator Museum', 'ADMIN'],
-    );
+  try {
+    const [adminCount] = await query<any[]>('SELECT COUNT(*) AS count FROM admins');
+    if (Number(adminCount?.count) === 0) {
+      const passwordHash = await bcrypt.hash(process.env.ADMIN_INITIAL_PASSWORD || 'admin123', 10);
+      await query(
+        'INSERT INTO admins (username, password_hash, nama, role, created_at, updated_at) VALUES (?, ?, ?, ?, NOW(), NOW())',
+        [process.env.ADMIN_INITIAL_USERNAME || 'admin', passwordHash, 'Administrator Museum', 'ADMIN'],
+      );
+    }
+  } catch (err) {
+    console.warn('[Database] Gagal seed tabel admins:', err);
   }
 
   try {
