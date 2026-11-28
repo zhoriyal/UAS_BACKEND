@@ -52,8 +52,10 @@ if (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0) {
 }
 app.set('trust proxy', trustProxyHops);
 
+const corsOptions = createCorsOptions();
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(requestLogger);
-app.use(cors(createCorsOptions()));
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' },
 }));
