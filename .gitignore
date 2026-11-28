@@ -3,6 +3,7 @@ node_modules
 .env.*
 !.env.example
 !.env.railway.example
+!.env.render.example
 dist
 build
 uploads/
