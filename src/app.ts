@@ -1,6 +1,8 @@
 import path from 'node:path';
 import dotenv from 'dotenv';
-dotenv.config({ path: path.resolve(__dirname, '../.env'), override: true });
+if (!process.env.VERCEL) {
+  dotenv.config({ path: path.resolve(__dirname, '../.env'), override: false });
+}
 import cors from 'cors';
 import express, { RequestHandler } from 'express';
 import helmet from 'helmet';
