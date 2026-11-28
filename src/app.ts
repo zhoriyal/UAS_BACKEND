@@ -29,7 +29,7 @@ const port = Number(process.env.PORT) || 3001;
 
 getJwtSecret();
 
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SANDBOX_IN_PRODUCTION !== 'true') {
   if (process.env.MIDTRANS_IS_PRODUCTION !== 'true') {
     throw new Error('MIDTRANS_IS_PRODUCTION harus bernilai true di production');
   }
@@ -112,22 +112,26 @@ app.use((_req, res) => {
 
 app.use(errorHandler);
 
-Promise.all([
+export const dbReady = Promise.all([
   prisma.$connect().catch((err: unknown) => {
     logger.warn({ err }, 'Prisma MySQL tidak aktif, berjalan dalam mode fallback SQLite lokal');
   }),
   initializeDatabase().catch((err: unknown) => {
     logger.warn({ err }, 'Inisialisasi tabel/seed database dilewati atau terjadi kesalahan non-fatal');
   }),
-])
-  .then(() => {
-    app.listen(port, () => {
-      logger.info({ port }, `Museum Brawijaya Backend API berjalan di http://localhost:${port}`);
+]);
+
+if (!process.env.VERCEL) {
+  dbReady
+    .then(() => {
+      app.listen(port, () => {
+        logger.info({ port }, `Museum Brawijaya Backend API berjalan di http://localhost:${port}`);
+      });
+    })
+    .catch((error: unknown) => {
+      logger.fatal({ err: error }, 'Gagal memulai server backend');
+      process.exitCode = 1;
     });
-  })
-  .catch((error: unknown) => {
-    logger.fatal({ err: error }, 'Gagal memulai server backend');
-    process.exitCode = 1;
-  });
+}
 
 export default app;
