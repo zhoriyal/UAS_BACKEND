@@ -98,11 +98,15 @@ export async function query<T = any>(sql: string, params: unknown[] = []): Promi
 }
 
 async function seedTable(table: string, rows: unknown[][], insertSql: string) {
-  const [count] = await query<any[]>(`SELECT COUNT(*) AS count FROM \`${table}\``);
-  if (Number(count?.count) === 0) {
-    for (const row of rows) {
-      await query(insertSql, row);
+  try {
+    const [count] = await query<any[]>(`SELECT COUNT(*) AS count FROM \`${table}\``);
+    if (Number(count?.count) === 0) {
+      for (const row of rows) {
+        await query(insertSql, row);
+      }
     }
+  } catch (err) {
+    console.warn(`[Database] Gagal seed tabel ${table}:`, err);
   }
 }
 
@@ -230,7 +234,7 @@ export async function initializeDatabase() {
       ['PELAJAR / MAHASISWA', '#dbeafe', '#1e40af', 'Tiket Pelajar / Rombongan (WNI)', 5000, 300, 'Aktif'],
       ['MANCANEGARA', '#f3e8ff', '#6b21a8', 'Tiket Wisatawan Asing (WNA)', 25000, 100, 'Aktif'],
     ],
-    'INSERT INTO ticket_categories (badge, badge_bg, badge_color, title, price, kuota, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO ticket_categories (badge, badge_bg, badge_color, title, price, kuota, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
   );
 
   await seedTable(
@@ -268,7 +272,7 @@ export async function initializeDatabase() {
       ['Pameran Khusus Artefak Perjuangan Malang Raya', 'Pameran tematik di Gedung Utama Lantai 2.', 'Agenda Event', '18 Sep 2026', 'AKTIF'],
       ['Pemeliharaan Area Koleksi Kendaraan Berat', 'Sebagian area luar ruangan ditutup sementara untuk perbaikan.', 'Pemeliharaan', '02 Sep 2026', 'ARSIP'],
     ],
-    'INSERT INTO pengumuman (title, description, category, date, status) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO pengumuman (title, description, category, date, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
   );
 
   await seedTable(
@@ -278,13 +282,13 @@ export async function initializeDatabase() {
       ['Apakah diperbolehkan membawa kamera profesional ke dalam area museum?', 'Diperbolehkan dengan syarat tidak menggunakan flash pada koleksi bersejarah tertentu yang sensitif cahaya.'],
       ['Berapa lama waktu kunjungan yang direkomendasikan?', 'Kami merekomendasikan waktu kunjungan minimal 2-3 jam untuk menikmati seluruh koleksi dengan optimal.'],
     ],
-    'INSERT INTO faq (question, answer) VALUES (?, ?)',
+    'INSERT INTO faq (question, answer, created_at) VALUES (?, ?, NOW())',
   );
 
   await seedTable(
     'jam_operasional',
     [['Selasa - Minggu (Senin Libur)', '08:00 - 15:00 WIB', '(0341) 551502']],
-    'INSERT INTO jam_operasional (hari, jam, telepon) VALUES (?, ?, ?)',
+    'INSERT INTO jam_operasional (hari, jam, telepon, updated_at) VALUES (?, ?, ?, NOW())',
   );
 }
 
