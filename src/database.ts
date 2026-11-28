@@ -37,6 +37,8 @@ if (!isSqliteUrl) {
       }
     : undefined;
 
+  const defaultPoolLimit = process.env.VERCEL ? 2 : 10;
+
   pool = mysql.createPool({
     host: connectionUrl.hostname,
     port: Number(connectionUrl.port) || 3306,
@@ -44,7 +46,9 @@ if (!isSqliteUrl) {
     password: decodeURIComponent(connectionUrl.password),
     database: decodeURIComponent(connectionUrl.pathname.slice(1)),
     waitForConnections: true,
-    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT) || 10,
+    connectionLimit: Number(process.env.DB_CONNECTION_LIMIT) || defaultPoolLimit,
+    maxIdle: process.env.VERCEL ? 1 : defaultPoolLimit,
+    idleTimeout: 10_000,
     queueLimit: 0,
     timezone: 'Z',
     ssl,
